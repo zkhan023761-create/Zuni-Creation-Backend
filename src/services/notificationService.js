@@ -1,14 +1,28 @@
 import nodemailer from 'nodemailer';
 
-// ── Email transporter ──────────────────────────────────────────────────────
+// ── Gmail OAuth2 transporter ───────────────────────────────────────────────
 function createTransporter() {
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,   // Must be a Gmail App Password (not your login password)
+      type: 'OAuth2',
+      user: process.env.GMAIL_USER,
+      clientId: process.env.GMAIL_CLIENT_ID,
+      clientSecret: process.env.GMAIL_CLIENT_SECRET,
+      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
     },
   });
+}
+
+// ── Guard: check env vars are set ─────────────────────────────────────────
+function isEmailConfigured() {
+  const required = ['GMAIL_USER', 'GMAIL_CLIENT_ID', 'GMAIL_CLIENT_SECRET', 'GMAIL_REFRESH_TOKEN'];
+  const missing = required.filter((k) => !process.env[k] || process.env[k].startsWith('your_'));
+  if (missing.length > 0) {
+    console.warn(`⚠️  Email not configured — missing env vars: ${missing.join(', ')}`);
+    return false;
+  }
+  return true;
 }
 
 // ── Format date nicely ─────────────────────────────────────────────────────
@@ -23,22 +37,9 @@ function formatDate(date) {
 
 // ── Send confirmation email to customer ───────────────────────────────────
 export async function sendConfirmationEmail(booking) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || process.env.EMAIL_PASS === 'your_gmail_app_password_here') {
-    console.warn('⚠️  Email not configured — set EMAIL_USER and EMAIL_PASS (Gmail App Password) in .env');
-    return;
-  }
+  if (!isEmailConfigured()) return;
 
   const transporter = createTransporter();
-
-  // Verify connection before sending
-  try {
-    await transporter.verify();
-  } catch (verifyErr) {
-    console.error('❌ Email transporter verification failed:', verifyErr.message);
-    console.error('   Make sure EMAIL_PASS is a Gmail App Password, not your login password.');
-    console.error('   Get one at: Google Account → Security → 2-Step Verification → App Passwords');
-    throw verifyErr;
-  }
 
   const html = `
 <!DOCTYPE html>
@@ -130,7 +131,7 @@ export async function sendConfirmationEmail(booking) {
   `;
 
   await transporter.sendMail({
-    from: `"Zuniii Creation 🌸" <${process.env.EMAIL_USER}>`,
+    from: `"Zuniii Creation 🌸" <${process.env.GMAIL_USER}>`,
     to: booking.email,
     subject: `✅ Booking Confirmed — ${formatDate(booking.preferredDate)} | Zuniii Creation`,
     html,
@@ -166,18 +167,9 @@ export function buildWhatsAppMessage(booking) {
 
 // ── Send completion / thank-you email to customer ─────────────────────────
 export async function sendCompletionEmail(booking) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || process.env.EMAIL_PASS === 'your_gmail_app_password_here') {
-    console.warn('⚠️  Email not configured — set EMAIL_USER and EMAIL_PASS (Gmail App Password) in .env');
-    return;
-  }
+  if (!isEmailConfigured()) return;
 
   const transporter = createTransporter();
-  try {
-    await transporter.verify();
-  } catch (verifyErr) {
-    console.error('❌ Email transporter verification failed:', verifyErr.message);
-    throw verifyErr;
-  }
 
   const html = `
 <!DOCTYPE html>
@@ -259,7 +251,7 @@ export async function sendCompletionEmail(booking) {
   `;
 
   await transporter.sendMail({
-    from: `"Zuniii Creation 🌸" <${process.env.EMAIL_USER}>`,
+    from: `"Zuniii Creation 🌸" <${process.env.GMAIL_USER}>`,
     to: booking.email,
     subject: `🌸 Thank You ${booking.customerName}! Your Mehndi Session is Complete — Zuniii Creation`,
     html,

@@ -25,7 +25,7 @@ function tokenPair(user) {
 // ── POST /api/users/register ───────────────────────────────────────────────
 export async function register(req, res) {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, phone, password } = req.body;
     if (!name || !email || !password)
       return res.status(400).json({ message: 'Name, email and password are required' });
     if (password.length < 6)
@@ -39,7 +39,7 @@ export async function register(req, res) {
     if (existing && !existing.isVerified) await User.deleteOne({ _id: existing._id });
 
     // Create unverified user (password hashed by pre-save hook)
-    await User.create({ name, email, password, role: 'user', isVerified: false });
+    await User.create({ name, email, phone, password, role: 'user', isVerified: false });
 
     await sendOtp(email, 'registration', name);
     res.status(202).json({ message: 'OTP sent to your email. Please verify to complete registration.' });

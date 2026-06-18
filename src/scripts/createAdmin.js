@@ -9,8 +9,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '../../.env') });
 
 const ADMIN_NAME = 'Admin';
-const ADMIN_EMAIL = 'admin@zuniii.com';
-const ADMIN_PASSWORD = 'Admin@123';
+const ADMIN_EMAIL = 'zuniicreation@gmail.com';
+const ADMIN_PASSWORD = 'zunicreation12';
 
 async function createAdmin() {
   try {
@@ -38,7 +38,7 @@ async function createAdmin() {
       // Reset password in case it's wrong
       const hashed = await bcrypt.hash(ADMIN_PASSWORD, 12);
       await User.updateOne({ email: ADMIN_EMAIL }, { password: hashed, isVerified: true });
-      console.log('✅ Password has been reset to: Admin@123\n');
+      console.log('✅ Password has been reset to: zunicreation12\n');
     } else {
       const hashed = await bcrypt.hash(ADMIN_PASSWORD, 12);
       await User.create({

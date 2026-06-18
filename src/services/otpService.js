@@ -1,20 +1,13 @@
 import bcrypt from 'bcryptjs';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import OTP from '../models/OTP.js';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const OTP_EXPIRY_MINUTES = 10;
 const BCRYPT_SALT_ROUNDS  = 10;
 
-// ── Email transporter (reuse same Gmail setup) ─────────────────────────────
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
-}
+
 
 // ── Generate a 6-digit numeric OTP ────────────────────────────────────────
 function generateCode() {
@@ -86,23 +79,26 @@ export async function sendOtp(email, purpose, name = '') {
   const code = generateCode();
 
   // 1. Send email FIRST (fail fast before any DB write)
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || process.env.EMAIL_PASS === 'your_gmail_app_password_here') {
-    throw new Error('Email service not configured. Please set EMAIL_USER and EMAIL_PASS in .env');
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('Email service not configured. Please set RESEND_API_KEY in .env');
   }
 
-  const transporter = createTransporter();
   const subjectMap = {
     registration:   '🌸 Verify your email — Zuniii Creation',
     login:          '🔐 Your login OTP — Zuniii Creation',
     password_reset: '🔑 Reset your password — Zuniii Creation',
   };
 
-  await transporter.sendMail({
-    from: `"Zuniii Creation 🌸" <${process.env.EMAIL_USER}>`,
+  const { data, error } = await resend.emails.send({
+    from: `"Zuniii Creation 🌸" <${process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'}>`,
     to:   email,
     subject: subjectMap[purpose],
     html: buildOtpEmail(code, purpose, name),
   });
+
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
 
   // 2. Email sent — now hash and persist (delete any existing OTP first)
   await OTP.deleteMany({ email, purpose });

@@ -143,15 +143,27 @@ describe('register()', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('loginPassword()', () => {
+  let bcryptCompareSpy;
+  
+  beforeEach(async () => {
+    const bcrypt = await import('bcryptjs');
+    bcryptCompareSpy = jest.spyOn(bcrypt.default || bcrypt, 'compare');
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test('valid credentials: returns token pair with accessToken, refreshToken, and user', async () => {
     const mockUser = {
       _id: 'user-id-1',
       name: 'Alice',
       email: 'alice@example.com',
       role: 'user',
-      comparePassword: jest.fn().mockResolvedValue(true),
+      password: 'hashedpassword',
     };
     User.findOne.mockResolvedValue(mockUser);
+    bcryptCompareSpy.mockResolvedValue(true);
 
     const req = { body: { email: 'alice@example.com', password: 'secret123' } };
     const res = mockRes();
@@ -177,9 +189,10 @@ describe('loginPassword()', () => {
       name: 'Alice',
       email: 'alice@example.com',
       role: 'user',
-      comparePassword: jest.fn().mockResolvedValue(false),
+      password: 'hashedpassword',
     };
     User.findOne.mockResolvedValue(mockUser);
+    bcryptCompareSpy.mockResolvedValue(false);
 
     const req = { body: { email: 'alice@example.com', password: 'wrongpassword' } };
     const res = mockRes();

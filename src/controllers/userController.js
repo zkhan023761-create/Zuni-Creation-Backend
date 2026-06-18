@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
 import { sendOtp, validateOtp } from '../services/otpService.js';
@@ -38,16 +39,15 @@ export async function register(req, res) {
     // Remove any unverified account with same email (allow re-registration)
     if (existing && !existing.isVerified) await User.deleteOne({ _id: existing._id });
 
-    // Create unverified user (password hashed by pre-save hook)
-    await User.create({ name, email, phone, password, role: 'user', isVerified: false });
+    // Create unverified user
+    const hashedPassword = await bcrypt.hash(password, 14);
+    await User.create({ name, email, phone, password: hashedPassword, role: 'user', isVerified: false });
 
     await sendOtp(email, 'registration', name);
     res.status(202).json({ message: 'OTP sent to your email. Please verify to complete registration.' });
   } catch (err) {
     console.error('register error:', err.message);
-    if (err.message.includes('Email service'))
-      return res.status(500).json({ message: 'Failed to send OTP email. Please try again.' });
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
@@ -87,7 +87,7 @@ export async function loginPassword(req, res) {
     const user = await User.findOne({ email, role: 'user', isVerified: true });
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
     res.json(tokenPair(user));
@@ -110,9 +110,7 @@ export async function sendLoginOtp(req, res) {
     res.status(202).json({ message: 'OTP sent to your email' });
   } catch (err) {
     console.error('sendLoginOtp error:', err.message);
-    if (err.message.includes('Email service'))
-      return res.status(500).json({ message: 'Failed to send OTP email. Please try again.' });
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
@@ -210,7 +208,7 @@ export async function resetPassword(req, res) {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'Account not found' });
 
-    user.password = newPassword; // pre-save hook will hash it
+    user.password = await bcrypt.hash(newPassword, 14);
     await user.save();
 
     res.json({ message: 'Password reset successfully. You can now log in.' });

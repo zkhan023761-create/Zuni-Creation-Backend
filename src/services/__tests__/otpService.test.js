@@ -41,8 +41,10 @@ const { default: nodemailer } = await import('nodemailer');
 
 // ── Test setup ────────────────────────────────────────────────────────────
 beforeAll(() => {
-  process.env.EMAIL_USER = 'test@example.com';
-  process.env.EMAIL_PASS = 'test-password';
+  process.env.GMAIL_USER = 'test@example.com';
+  process.env.GMAIL_CLIENT_ID = 'test-client-id';
+  process.env.GMAIL_CLIENT_SECRET = 'test-client-secret';
+  process.env.GMAIL_REFRESH_TOKEN = 'test-refresh-token';
 });
 
 beforeEach(() => {
@@ -196,26 +198,26 @@ describe('sendOtp() — failure path', () => {
     expect(OTP.create).not.toHaveBeenCalled();
   });
 
-  test('throws when EMAIL_USER is not set', async () => {
-    const originalUser = process.env.EMAIL_USER;
-    delete process.env.EMAIL_USER;
+  test('throws when GMAIL_USER is not set', async () => {
+    const originalUser = process.env.GMAIL_USER;
+    delete process.env.GMAIL_USER;
 
     await expect(sendOtp('user@example.com', 'registration')).rejects.toThrow(
       'Email service not configured'
     );
 
-    process.env.EMAIL_USER = originalUser;
+    process.env.GMAIL_USER = originalUser;
   });
 
-  test('throws when EMAIL_PASS is not set', async () => {
-    const originalPass = process.env.EMAIL_PASS;
-    delete process.env.EMAIL_PASS;
+  test('throws when GMAIL_CLIENT_ID is not set', async () => {
+    const originalPass = process.env.GMAIL_CLIENT_ID;
+    delete process.env.GMAIL_CLIENT_ID;
 
     await expect(sendOtp('user@example.com', 'registration')).rejects.toThrow(
       'Email service not configured'
     );
 
-    process.env.EMAIL_PASS = originalPass;
+    process.env.GMAIL_CLIENT_ID = originalPass;
   });
 });
 

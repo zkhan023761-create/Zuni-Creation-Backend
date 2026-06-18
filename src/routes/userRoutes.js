@@ -14,17 +14,19 @@ import {
   updateEmoji,
 } from '../controllers/userController.js';
 
+import { authLimiter } from '../middleware/rateLimiter.js';
+
 const router = express.Router();
 
 // Public routes
-router.post('/register',         register);
-router.post('/verify-otp',       verifyOtp);
-router.post('/login-password',   loginPassword);
-router.post('/send-login-otp',   sendLoginOtp);
-router.post('/login-otp',        loginOtp);
-router.post('/refresh',          refresh);
-router.post('/send-reset-otp',   sendResetOtp);
-router.post('/reset-password',   resetPassword);
+router.post('/register',         authLimiter, register);
+router.post('/verify-otp',       authLimiter, verifyOtp);
+router.post('/login-password',   authLimiter, loginPassword);
+router.post('/send-login-otp',   authLimiter, sendLoginOtp);
+router.post('/login-otp',        authLimiter, loginOtp);
+router.post('/refresh',          authLimiter, refresh);
+router.post('/send-reset-otp',   authLimiter, sendResetOtp);
+router.post('/reset-password',   authLimiter, resetPassword);
 
 // Protected routes (customer only)
 router.get('/me',          auth, userOnly, me);

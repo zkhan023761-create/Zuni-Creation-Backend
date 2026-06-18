@@ -2,9 +2,11 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { sendOtp, validateOtp } from '../services/otpService.js';
 import { auth, adminOnly } from '../middleware/auth.js';
 import { OAuth2Client } from 'google-auth-library';
+import { authLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -30,6 +32,7 @@ function generateRefreshToken(id) {
 // ── Register ───────────────────────────────────────────────────────────────
 router.post(
   '/register',
+  authLimiter,
   body('name').trim().notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Valid email required'),
   body('password').isLength({ min: 6 }).withMessage('Password min 6 chars'),
@@ -40,7 +43,8 @@ router.post(
       const { name, email, password } = req.body;
       const exists = await User.findOne({ email });
       if (exists) return res.status(400).json({ message: 'Email already exists' });
-      const user = await User.create({ name, email, password, role: 'admin' });
+      const hashedPassword = await bcrypt.hash(password, 14);
+      const user = await User.create({ name, email, password: hashedPassword, role: 'admin' });
       const accessToken  = generateAccessToken(user._id.toString(), user.email, user.role);
       const refreshToken = generateRefreshToken(user._id.toString());
       res.status(201).json({
@@ -57,6 +61,7 @@ router.post(
 // ── Login ──────────────────────────────────────────────────────────────────
 router.post(
   '/login',
+  authLimiter,
   body('email').isEmail().withMessage('Valid email required'),
   body('password').notEmpty().withMessage('Password required'),
   async (req, res) => {
@@ -66,7 +71,7 @@ router.post(
       const { email, password } = req.body;
       const user = await User.findOne({ email });
       if (!user) return res.status(400).json({ message: 'Invalid credentials' });
-      const isMatch = await user.comparePassword(password);
+      const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
       const accessToken  = generateAccessToken(user._id.toString(), user.email, user.role);
       const refreshToken = generateRefreshToken(user._id.toString());
@@ -82,7 +87,7 @@ router.post(
 );
 
 // ── Google Login ───────────────────────────────────────────────────────────
-router.post('/google', async (req, res) => {
+router.post('/google', authLimiter, async (req, res) => {
   try {
     const { credential } = req.body;
     if (!credential) return res.status(400).json({ message: 'Google credential is required' });
@@ -100,7 +105,8 @@ router.post('/google', async (req, res) => {
     if (!user) {
       // Create a new user with a random password since they use Google
       const randomPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
-      user = await User.create({ name: userName, email, password: randomPassword, role: 'user', isVerified: true });
+      const hashedPassword = await bcrypt.hash(randomPassword, 14);
+      user = await User.create({ name: userName, email, password: hashedPassword, role: 'user', isVerified: true });
     }
 
     const accessToken  = generateAccessToken(user._id.toString(), user.email, user.role);
@@ -122,7 +128,7 @@ router.post('/google', async (req, res) => {
 });
 
 // ── Refresh access token ───────────────────────────────────────────────────
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', authLimiter, async (req, res) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) return res.status(401).json({ message: 'No refresh token' });
@@ -156,7 +162,7 @@ router.get('/me', async (req, res) => {
 });
 
 // ── Send admin password-reset OTP ──────────────────────────────────────────
-router.post('/send-reset-otp', async (req, res) => {
+router.post('/send-reset-otp', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
@@ -175,7 +181,7 @@ router.post('/send-reset-otp', async (req, res) => {
 });
 
 // ── Reset admin password with OTP ──────────────────────────────────────────
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', authLimiter, async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
     if (!email || !otp || !newPassword)
@@ -188,7 +194,7 @@ router.post('/reset-password', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'Account not found' });
 
-    user.password = newPassword; // pre-save hook hashes it
+    user.password = await bcrypt.hash(newPassword, 14);
     await user.save();
 
     res.json({ message: 'Password reset successfully. You can now log in.' });

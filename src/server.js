@@ -17,8 +17,14 @@ const PORT = process.env.PORT || 5000;
 
 // ── Middleware ─────────────────────────────────────────────────────────────
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://zunii-creation.vercel.app',
+  process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : null
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: allowedOrigins,
   credentials: true,
 }));
 app.use(express.json());

@@ -4,7 +4,9 @@ import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import { sendOtp, validateOtp } from '../services/otpService.js';
 import { auth, adminOnly } from '../middleware/auth.js';
+import { OAuth2Client } from 'google-auth-library';
 
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const router = express.Router();
 
 const ACCESS_EXPIRY  = '15m';
@@ -79,6 +81,40 @@ router.post(
     }
   }
 );
+
+// ── Google Login ───────────────────────────────────────────────────────────
+router.post('/google', async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) return res.status(400).json({ message: 'Google credential is required' });
+
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { email, name } = payload;
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      // Create a new user with a random password since they use Google
+      const randomPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+      user = await User.create({ name, email, password: randomPassword, role: 'user', isVerified: true });
+    }
+
+    const accessToken  = generateAccessToken(user._id.toString(), user.email, user.role);
+    const refreshToken = generateRefreshToken(user._id.toString());
+    
+    res.json({
+      token: accessToken,
+      refreshToken,
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, emoji: user.emoji },
+    });
+  } catch (error) {
+    console.error('Google login error:', error);
+    res.status(401).json({ message: 'Invalid Google token' });
+  }
+});
 
 // ── Refresh access token ───────────────────────────────────────────────────
 router.post('/refresh', async (req, res) => {

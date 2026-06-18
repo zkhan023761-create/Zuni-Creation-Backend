@@ -1,8 +1,25 @@
 import bcrypt from 'bcryptjs';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import OTP from '../models/OTP.js';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function createTransporter() {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      type: 'OAuth2',
+      user: process.env.GMAIL_USER,
+      clientId: process.env.GMAIL_CLIENT_ID,
+      clientSecret: process.env.GMAIL_CLIENT_SECRET,
+      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+    },
+  });
+}
+
+function isEmailConfigured() {
+  const required = ['GMAIL_USER', 'GMAIL_CLIENT_ID', 'GMAIL_CLIENT_SECRET', 'GMAIL_REFRESH_TOKEN'];
+  const missing = required.filter((k) => !process.env[k] || process.env[k].startsWith('your_'));
+  return missing.length === 0;
+}
 
 const OTP_EXPIRY_MINUTES = 10;
 const BCRYPT_SALT_ROUNDS  = 10;
@@ -79,9 +96,11 @@ export async function sendOtp(email, purpose, name = '') {
   const code = generateCode();
 
   // 1. Send email FIRST (fail fast before any DB write)
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error('Email service not configured. Please set RESEND_API_KEY in .env');
+  if (!isEmailConfigured()) {
+    throw new Error('Email service not configured. Please set GMAIL OAuth credentials in .env');
   }
+
+  const transporter = createTransporter();
 
   const subjectMap = {
     registration:   '🌸 Verify your email — Zuniii Creation',
@@ -89,14 +108,14 @@ export async function sendOtp(email, purpose, name = '') {
     password_reset: '🔑 Reset your password — Zuniii Creation',
   };
 
-  const { data, error } = await resend.emails.send({
-    from: `"Zuniii Creation 🌸" <${process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'}>`,
-    to:   email,
-    subject: subjectMap[purpose],
-    html: buildOtpEmail(code, purpose, name),
-  });
-
-  if (error) {
+  try {
+    await transporter.sendMail({
+      from: `"Zuniii Creation 🌸" <${process.env.GMAIL_USER}>`,
+      to:   email,
+      subject: subjectMap[purpose],
+      html: buildOtpEmail(code, purpose, name),
+    });
+  } catch (error) {
     throw new Error(`Failed to send email: ${error.message}`);
   }
 

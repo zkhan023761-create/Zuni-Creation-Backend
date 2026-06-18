@@ -6,7 +6,6 @@ import { sendOtp, validateOtp } from '../services/otpService.js';
 import { auth, adminOnly } from '../middleware/auth.js';
 import { OAuth2Client } from 'google-auth-library';
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const router = express.Router();
 
 const ACCESS_EXPIRY  = '15m';
@@ -88,18 +87,20 @@ router.post('/google', async (req, res) => {
     const { credential } = req.body;
     if (!credential) return res.status(400).json({ message: 'Google credential is required' });
 
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
     const ticket = await client.verifyIdToken({
       idToken: credential,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
     const payload = ticket.getPayload();
     const { email, name } = payload;
+    const userName = name || email.split('@')[0];
 
     let user = await User.findOne({ email });
     if (!user) {
       // Create a new user with a random password since they use Google
       const randomPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
-      user = await User.create({ name, email, password: randomPassword, role: 'user', isVerified: true });
+      user = await User.create({ name: userName, email, password: randomPassword, role: 'user', isVerified: true });
     }
 
     const accessToken  = generateAccessToken(user._id.toString(), user.email, user.role);
@@ -112,7 +113,11 @@ router.post('/google', async (req, res) => {
     });
   } catch (error) {
     console.error('Google login error:', error);
-    res.status(401).json({ message: 'Invalid Google token' });
+    if (error.name === 'ValidationError') {
+      res.status(400).json({ message: 'Failed to create user account: ' + error.message });
+    } else {
+      res.status(401).json({ message: 'Invalid Google token or connection error' });
+    }
   }
 });
 

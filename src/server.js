@@ -1,6 +1,6 @@
+import 'dotenv/config'; // Load env vars before anything else
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { connectDB } from './config/db.js';
 import userRoutes from './routes/userRoutes.js';
@@ -8,10 +8,7 @@ import authRoutes from './routes/authRoutes.js';
 import serviceRoutes from './routes/serviceRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 import galleryRoutes from './routes/galleryRoutes.js';
-import testimonialRoutes from './routes/testimonialRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -72,7 +69,7 @@ app.use('/api/contact',  contactRoutes);
 
 app.use('/api/services',     serviceRoutes);
 app.use('/api/gallery',      galleryRoutes);
-app.use('/api/testimonials', testimonialRoutes);
+
 
 app.get('/', (req, res) => {
   res.json({ message: 'Zuniii Creation API is running', version: '1.0.0' });

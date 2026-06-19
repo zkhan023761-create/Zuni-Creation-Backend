@@ -1,17 +1,22 @@
 import nodemailer from 'nodemailer';
 
 // ── Gmail OAuth2 transporter ───────────────────────────────────────────────
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      type: 'OAuth2',
-      user: process.env.GMAIL_USER,
-      clientId: process.env.GMAIL_CLIENT_ID,
-      clientSecret: process.env.GMAIL_CLIENT_SECRET,
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-    },
-  });
+let transporterInstance = null;
+
+function getTransporter() {
+  if (!transporterInstance) {
+    transporterInstance = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: process.env.GMAIL_USER,
+        clientId: process.env.GMAIL_CLIENT_ID,
+        clientSecret: process.env.GMAIL_CLIENT_SECRET,
+        refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+      },
+    });
+  }
+  return transporterInstance;
 }
 
 // ── Guard: check env vars are set ─────────────────────────────────────────
@@ -39,7 +44,7 @@ function formatDate(date) {
 export async function sendConfirmationEmail(booking) {
   if (!isEmailConfigured()) return;
 
-  const transporter = createTransporter();
+  const transporter = getTransporter();
 
   const html = `
 <!DOCTYPE html>
@@ -169,7 +174,7 @@ export function buildWhatsAppMessage(booking) {
 export async function sendCompletionEmail(booking) {
   if (!isEmailConfigured()) return;
 
-  const transporter = createTransporter();
+  const transporter = getTransporter();
 
   const html = `
 <!DOCTYPE html>

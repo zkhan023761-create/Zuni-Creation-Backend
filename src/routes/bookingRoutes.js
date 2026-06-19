@@ -15,6 +15,24 @@ router.get('/', auth, adminOnly, async (req, res) => {
   }
 });
 
+// Public: get unavailable dates
+router.get('/unavailable-dates', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const bookings = await Booking.find({
+      status: { $in: ['pending', 'confirmed'] },
+      preferredDate: { $gte: today }
+    }, 'preferredDate');
+
+    const dates = bookings.map(b => b.preferredDate.toISOString().split('T')[0]);
+    res.json([...new Set(dates)]);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Public: create booking
 router.post('/', async (req, res) => {
   try {
@@ -49,10 +67,12 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
       : null;
 
     if (isNowConfirmed) {
-      // 1. Send confirmation email (non-blocking)
-      sendConfirmationEmail(booking).catch((err) =>
-        console.error('Email send failed:', err.message)
-      );
+      // 1. Send confirmation email
+      try {
+        await sendConfirmationEmail(booking);
+      } catch (err) {
+        console.error('Confirmation email send failed:', err.message);
+      }
 
       // 2. Build WhatsApp deep-link for admin to send manually
       const waText = buildWhatsAppMessage(booking);
@@ -64,10 +84,12 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     }
 
     if (isNowCompleted) {
-      // 1. Send thank-you / completion email (non-blocking)
-      sendCompletionEmail(booking).catch((err) =>
-        console.error('Completion email send failed:', err.message)
-      );
+      // 1. Send thank-you / completion email
+      try {
+        await sendCompletionEmail(booking);
+      } catch (err) {
+        console.error('Completion email send failed:', err.message);
+      }
 
       // 2. Build thank-you WhatsApp deep-link for admin to send manually
       const waText = buildCompletionWhatsAppMessage(booking);

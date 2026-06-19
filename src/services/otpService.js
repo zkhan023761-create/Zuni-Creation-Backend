@@ -2,17 +2,22 @@ import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import OTP from '../models/OTP.js';
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      type: 'OAuth2',
-      user: process.env.GMAIL_USER,
-      clientId: process.env.GMAIL_CLIENT_ID,
-      clientSecret: process.env.GMAIL_CLIENT_SECRET,
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-    },
-  });
+let transporterInstance = null;
+
+function getTransporter() {
+  if (!transporterInstance) {
+    transporterInstance = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: process.env.GMAIL_USER,
+        clientId: process.env.GMAIL_CLIENT_ID,
+        clientSecret: process.env.GMAIL_CLIENT_SECRET,
+        refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+      },
+    });
+  }
+  return transporterInstance;
 }
 
 function isEmailConfigured() {
@@ -100,7 +105,7 @@ export async function sendOtp(email, purpose, name = '') {
     throw new Error('Email service not configured. Please set GMAIL OAuth credentials in .env');
   }
 
-  const transporter = createTransporter();
+  const transporter = getTransporter();
 
   const subjectMap = {
     registration:   '🌸 Verify your email — Zuniii Creation',

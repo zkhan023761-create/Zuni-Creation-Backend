@@ -15,9 +15,21 @@ function getTransporter() {
         clientSecret: process.env.GMAIL_CLIENT_SECRET,
         refreshToken: process.env.GMAIL_REFRESH_TOKEN,
       },
+      // Keep connection pool alive — avoids re-handshake on every call
+      pool: true,
+      maxConnections: 3,
     });
   }
   return transporterInstance;
+}
+
+// Pre-warm: verify SMTP connection on startup so first OTP send is instant
+export function warmUpTransporter() {
+  if (!isEmailConfigured()) return;
+  getTransporter().verify().catch(() => {
+    // Reset on error so next call re-creates
+    transporterInstance = null;
+  });
 }
 
 function isEmailConfigured() {
@@ -27,7 +39,8 @@ function isEmailConfigured() {
 }
 
 const OTP_EXPIRY_MINUTES = 10;
-const BCRYPT_SALT_ROUNDS  = 10;
+// 6 rounds is fast (~30ms) and still secure for short-lived 6-digit OTPs
+const BCRYPT_SALT_ROUNDS  = 6;
 
 
 
@@ -96,11 +109,10 @@ function buildOtpEmail(code, purpose, name = '') {
 </html>`;
 }
 
-// ── Send OTP: email first, then persist ───────────────────────────────────
+// ── Send OTP: email + DB ops run in parallel ───────────────────────────────
 export async function sendOtp(email, purpose, name = '') {
   const code = generateCode();
 
-  // 1. Send email FIRST (fail fast before any DB write)
   if (!isEmailConfigured()) {
     throw new Error('Email service not configured. Please set GMAIL OAuth credentials in .env');
   }
@@ -113,23 +125,23 @@ export async function sendOtp(email, purpose, name = '') {
     password_reset: '🔑 Reset your password — Zuniii Creation',
   };
 
-  try {
-    await transporter.sendMail({
+  const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+  // ⚡ Run email send, DB cleanup, and bcrypt hash all in parallel
+  const [, hashedOtp] = await Promise.all([
+    transporter.sendMail({
       from: `"Zuniii Creation 🌸" <${process.env.GMAIL_USER}>`,
       to:   email,
       subject: subjectMap[purpose],
       html: buildOtpEmail(code, purpose, name),
-    });
-  } catch (error) {
-    throw new Error(`Failed to send email: ${error.message}`);
-  }
+    }).catch((error) => {
+      throw new Error(`Failed to send email: ${error.message}`);
+    }),
+    bcrypt.hash(code, BCRYPT_SALT_ROUNDS),
+    OTP.deleteMany({ email, purpose }),   // fire-and-forget cleanup runs in parallel too
+  ]);
 
-  // 2. Email sent — now hash and persist (delete any existing OTP first)
-  await OTP.deleteMany({ email, purpose });
-
-  const hashedOtp = await bcrypt.hash(code, BCRYPT_SALT_ROUNDS);
-  const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
-
+  // Persist the new OTP
   await OTP.create({ email, hashedOtp, purpose, expiresAt });
   console.log(`✅ OTP sent to ${email} for ${purpose}`);
 }

@@ -101,17 +101,31 @@ router.post('/google', authLimiter, async (req, res) => {
     const { email, name } = payload;
     const userName = name || email.split('@')[0];
 
+    // Determine if this Google account is the admin
+    const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
+    const isAdmin = adminEmail && email.toLowerCase() === adminEmail;
+
     let user = await User.findOne({ email });
     if (!user) {
-      // Create a new user with a random password since they use Google
+      // Create new user — assign correct role from the start
       const randomPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
       const hashedPassword = await bcrypt.hash(randomPassword, 14);
-      user = await User.create({ name: userName, email, password: hashedPassword, role: 'user', isVerified: true });
+      user = await User.create({
+        name: userName,
+        email,
+        password: hashedPassword,
+        role: isAdmin ? 'admin' : 'user',
+        isVerified: true,
+      });
+    } else if (isAdmin && user.role !== 'admin') {
+      // Admin account was previously stored with wrong role — fix it in DB
+      user.role = 'admin';
+      await user.save();
     }
 
     const accessToken  = generateAccessToken(user._id.toString(), user.email, user.role);
     const refreshToken = generateRefreshToken(user._id.toString());
-    
+
     res.json({
       token: accessToken,
       refreshToken,

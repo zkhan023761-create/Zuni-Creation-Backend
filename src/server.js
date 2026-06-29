@@ -11,6 +11,7 @@ import galleryRoutes from './routes/galleryRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 
 import { authLimiter, apiLimiter, formLimiter, userLimiter } from './middleware/rateLimiter.js';
+import { warmUpTransporter } from './services/otpService.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -68,6 +69,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   connectDB();
+  warmUpTransporter(); // Pre-warm Gmail SMTP so first OTP is instant
 });
 
 export default app;

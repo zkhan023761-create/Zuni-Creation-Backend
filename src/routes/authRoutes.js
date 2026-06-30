@@ -8,6 +8,7 @@ import { auth, adminOnly } from '../middleware/auth.js';
 import SecurityLog from '../models/SecurityLog.js';
 import { OAuth2Client } from 'google-auth-library';
 import { authLimiter } from '../middleware/rateLimiter.js';
+import ActivityLog from '../models/ActivityLog.js';
 
 const router = express.Router();
 
@@ -266,6 +267,67 @@ router.get('/users', auth, adminOnly, async (req, res) => {
     res.json(usersWithStats);
   } catch (err) {
     console.error('admin getUsers error:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ── Update admin profile (name / email) ────────────────────────────────────
+router.put('/profile', auth, adminOnly, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    if (!name && !email) return res.status(400).json({ message: 'Name or email is required' });
+
+    const updates = {};
+    if (name  && name.trim())  updates.name  = name.trim();
+    if (email && email.trim()) updates.email = email.trim().toLowerCase();
+
+    // Check email conflict
+    if (updates.email) {
+      const conflict = await User.findOne({ email: updates.email, _id: { $ne: req.user.id } });
+      if (conflict) return res.status(409).json({ message: 'Email already in use by another account' });
+    }
+
+    const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true }).select('-password');
+    if (!user) return res.status(404).json({ message: 'Admin not found' });
+
+    const changed = Object.keys(updates).join(', ');
+    await ActivityLog.create({ user: user.email, action: 'admin_profile_updated', details: `Admin updated: ${changed}` }).catch(() => {});
+    await SecurityLog.create({ email: user.email, action: 'profile_updated', status: 'success', ip: req.ip }).catch(() => {});
+
+    res.json({ id: user._id, name: user.name, email: user.email, role: user.role, emoji: user.emoji });
+  } catch (err) {
+    console.error('updateAdminProfile error:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ── Change admin password (requires current password) ──────────────────────
+router.put('/change-password', auth, adminOnly, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    if (newPassword.length < 6)
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Admin not found' });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      await SecurityLog.create({ email: user.email, action: 'password_change_failed', status: 'failed', ip: req.ip, details: 'Wrong current password' }).catch(() => {});
+      return res.status(400).json({ message: 'Current password is incorrect' });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 14);
+    await user.save();
+
+    await ActivityLog.create({ user: user.email, action: 'password_changed', details: 'Admin password changed successfully' }).catch(() => {});
+    await SecurityLog.create({ email: user.email, action: 'password_changed', status: 'success', ip: req.ip }).catch(() => {});
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('changeAdminPassword error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });

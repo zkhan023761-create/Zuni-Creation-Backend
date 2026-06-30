@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
 import { sendOtp, validateOtp } from '../services/otpService.js';
+import ActivityLog from '../models/ActivityLog.js';
 
 const ACCESS_EXPIRY  = '15m';
 const REFRESH_EXPIRY = '7d';
@@ -211,6 +212,8 @@ export async function resetPassword(req, res) {
     user.password = await bcrypt.hash(newPassword, 14);
     await user.save();
 
+    await ActivityLog.create({ user: user.email, action: 'user_password_changed', details: `User ${user.email} changed their password` }).catch(() => {});
+
     res.json({ message: 'Password reset successfully. You can now log in.' });
   } catch (err) {
     const codeMap = {
@@ -259,6 +262,8 @@ export async function updateProfile(req, res) {
     ).select('-password');
 
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    await ActivityLog.create({ user: user.email, action: 'user_profile_updated', details: `User ${user.email} updated their profile name` }).catch(() => {});
 
     res.json({ id: user._id, name: user.name, email: user.email, role: user.role, emoji: user.emoji });
   } catch (err) {

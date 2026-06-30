@@ -6,6 +6,7 @@ const serviceSchema = new Schema(
     description: { type: String, required: true },
     price: { type: Number, required: true },
     duration: { type: String, required: true },
+    features: { type: [String], default: [] },
     image: { type: String },
     isActive: { type: Boolean, default: true },
   },

@@ -8,7 +8,7 @@ const securityLogSchema = new mongoose.Schema({
   action: {
     type: String,
     required: true,
-    enum: ['login', 'logout', 'password_reset_request', 'password_reset_success'],
+    enum: ['login', 'logout', 'password_reset_request', 'password_reset_success', 'profile_updated', 'password_changed', 'password_change_failed'],
   },
   status: {
     type: String,

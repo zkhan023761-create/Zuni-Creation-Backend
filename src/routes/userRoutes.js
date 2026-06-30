@@ -12,6 +12,7 @@ import {
   sendResetOtp,
   resetPassword,
   updateEmoji,
+  updateProfile,
 } from '../controllers/userController.js';
 
 import { authLimiter } from '../middleware/rateLimiter.js';
@@ -34,5 +35,6 @@ router.get('/my-bookings', auth, userOnly, myBookings);
 
 // Protected routes (both customers and admin)
 router.put('/profile/emoji', auth, updateEmoji);
+router.put('/profile',       auth, updateProfile);
 
 export default router;

@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { sendOtp, validateOtp } from '../services/otpService.js';
 import { auth, adminOnly } from '../middleware/auth.js';
+import SecurityLog from '../models/SecurityLog.js';
 import { OAuth2Client } from 'google-auth-library';
 import { authLimiter } from '../middleware/rateLimiter.js';
 
@@ -70,9 +71,18 @@ router.post(
     try {
       const { email, password } = req.body;
       const user = await User.findOne({ email });
-      if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+      if (!user) {
+        await SecurityLog.create({ email, action: 'login', status: 'failed', ip: req.ip, details: 'Invalid credentials' }).catch(()=>{});
+        return res.status(400).json({ message: 'Invalid credentials' });
+      }
       const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+      if (!isMatch) {
+        await SecurityLog.create({ email, action: 'login', status: 'failed', ip: req.ip, details: 'Invalid credentials' }).catch(()=>{});
+        return res.status(400).json({ message: 'Invalid credentials' });
+      }
+      if (user.role === 'admin') {
+        await SecurityLog.create({ email, action: 'login', status: 'success', ip: req.ip }).catch(()=>{});
+      }
       const accessToken  = generateAccessToken(user._id.toString(), user.email, user.role);
       const refreshToken = generateRefreshToken(user._id.toString());
       res.json({
@@ -182,9 +192,13 @@ router.post('/send-reset-otp', authLimiter, async (req, res) => {
     if (!email) return res.status(400).json({ message: 'Email is required' });
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'No account found with this email' });
+    if (!user) {
+      await SecurityLog.create({ email, action: 'password_reset_request', status: 'failed', ip: req.ip, details: 'Account not found' }).catch(()=>{});
+      return res.status(404).json({ message: 'No account found with this email' });
+    }
 
     await sendOtp(email, 'password_reset', user.name);
+    await SecurityLog.create({ email, action: 'password_reset_request', status: 'success', ip: req.ip }).catch(()=>{});
     res.status(202).json({ message: 'Password reset OTP sent to your email' });
   } catch (err) {
     console.error('admin sendResetOtp error:', err.message);
@@ -210,6 +224,8 @@ router.post('/reset-password', authLimiter, async (req, res) => {
 
     user.password = await bcrypt.hash(newPassword, 14);
     await user.save();
+    
+    await SecurityLog.create({ email, action: 'password_reset_success', status: 'success', ip: req.ip }).catch(()=>{});
 
     res.json({ message: 'Password reset successfully. You can now log in.' });
   } catch (err) {

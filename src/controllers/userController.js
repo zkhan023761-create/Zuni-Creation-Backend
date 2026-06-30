@@ -243,3 +243,26 @@ export async function updateEmoji(req, res) {
     res.status(500).json({ message: 'Server error' });
   }
 }
+
+// ── PUT /api/users/profile ───────────────────────────────────────────────
+export async function updateProfile(req, res) {
+  try {
+    const { name } = req.body;
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ message: 'Name is required' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { name: name.trim() },
+      { new: true }
+    ).select('-password');
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.json({ id: user._id, name: user.name, email: user.email, role: user.role, emoji: user.emoji });
+  } catch (err) {
+    console.error('updateProfile error:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+}

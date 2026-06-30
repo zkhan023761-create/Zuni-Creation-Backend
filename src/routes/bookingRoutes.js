@@ -2,6 +2,7 @@ import express from 'express';
 import Booking from '../models/Booking.js';
 import { auth, adminOnly } from '../middleware/auth.js';
 import { sendConfirmationEmail, buildWhatsAppMessage, sendCompletionEmail, buildCompletionWhatsAppMessage } from '../services/notificationService.js';
+import ActivityLog from '../models/ActivityLog.js';
 
 const router = express.Router();
 
@@ -37,6 +38,7 @@ router.get('/unavailable-dates', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const booking = await Booking.create(req.body);
+    await ActivityLog.create({ user: 'System', action: 'booking_created', details: `New booking by ${booking.customerName}` }).catch(()=>{});
     res.status(201).json(booking);
   } catch (error) {
     console.error('Booking create error:', error.message);
@@ -56,6 +58,10 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     if (!prevBooking) return res.status(404).json({ message: 'Booking not found' });
 
     const booking = await Booking.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    
+    if (prevBooking.status !== booking.status) {
+      await ActivityLog.create({ user: req.user.email, action: 'booking_status_changed', details: `Booking for ${booking.customerName} changed to ${booking.status}` }).catch(()=>{});
+    }
 
     // Determine what just changed
     const isNowConfirmed  = req.body.status === 'confirmed'  && prevBooking.status !== 'confirmed';
@@ -112,6 +118,7 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
     const booking = await Booking.findByIdAndDelete(req.params.id);
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    await ActivityLog.create({ user: req.user.email, action: 'booking_status_changed', details: `Booking for ${booking.customerName} deleted` }).catch(()=>{});
     res.json({ message: 'Booking deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });

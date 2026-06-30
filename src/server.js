@@ -8,7 +8,7 @@ import authRoutes from './routes/authRoutes.js';
 import serviceRoutes from './routes/serviceRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 import galleryRoutes from './routes/galleryRoutes.js';
-import contactRoutes from './routes/contactRoutes.js';
+import logRoutes from './routes/logRoutes.js';
 
 import { authLimiter, apiLimiter, formLimiter, userLimiter } from './middleware/rateLimiter.js';
 import { warmUpTransporter } from './services/otpService.js';
@@ -43,9 +43,8 @@ app.use('/api/users', userLimiter, userRoutes);
 // Public booking creation & contact form get the form limiter (POST only)
 // Admin GET/PUT/DELETE on bookings are NOT rate-limited by formLimiter
 app.post('/api/bookings', formLimiter);
-app.post('/api/contact',  formLimiter);
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/contact',  contactRoutes);
+app.use('/api/logs', logRoutes);
 
 app.use('/api/services',     serviceRoutes);
 app.use('/api/gallery',      galleryRoutes);
